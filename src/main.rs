@@ -77,7 +77,7 @@ enum Commands {
 
     /// Show context details
     Show {
-        /// Context ID
+        /// Context ID (short form or full ID)
         id: String,
 
         /// Show in JSON format
@@ -261,7 +261,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Show { id, json } => {
             let contexts = Contexts::open(&repo)?;
-            let context_id = resolve_id(&id)?;
+            let context_id = resolve_context_id_from_store(&id, &contexts)?;
 
             let Some(context) = contexts.get(&context_id)? else {
                 return Err(format!("Context not found: {id}").into());
@@ -386,7 +386,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Link { id, commit, issue, patch, plan } => {
             let mut contexts = Contexts::open(&repo)?;
-            let context_id = resolve_id(&id)?;
+            let context_id = resolve_context_id_from_store(&id, &contexts)?;
             let signer = profile.signer()?;
 
             let mut ctx = contexts.get_mut(&context_id)?;
@@ -396,24 +396,24 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 println!("Linked commit {} to context {}", sha, short_id(&context_id));
             }
             if let Some(i) = issue {
-                let issue_id = resolve_id(&i)?;
+                let issue_id = resolve_cob_id(&i)?;
                 ctx.link_issue(issue_id, &signer)?;
                 println!("Linked issue {} to context {}", short_id(&issue_id), short_id(&context_id));
             }
             if let Some(p) = patch {
-                let patch_id = resolve_id(&p)?;
+                let patch_id = resolve_cob_id(&p)?;
                 ctx.link_patch(patch_id, &signer)?;
                 println!("Linked patch {} to context {}", short_id(&patch_id), short_id(&context_id));
             }
             if let Some(pl) = plan {
-                let plan_id = resolve_id(&pl)?;
+                let plan_id = resolve_cob_id(&pl)?;
                 ctx.link_plan(plan_id, &signer)?;
                 println!("Linked plan {} to context {}", short_id(&plan_id), short_id(&context_id));
             }
         }
         Commands::Unlink { id, commit, issue, patch, plan } => {
             let mut contexts = Contexts::open(&repo)?;
-            let context_id = resolve_id(&id)?;
+            let context_id = resolve_context_id_from_store(&id, &contexts)?;
             let signer = profile.signer()?;
 
             let mut ctx = contexts.get_mut(&context_id)?;
@@ -423,17 +423,17 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 println!("Unlinked commit {} from context {}", sha, short_id(&context_id));
             }
             if let Some(i) = issue {
-                let issue_id = resolve_id(&i)?;
+                let issue_id = resolve_cob_id(&i)?;
                 ctx.unlink_issue(issue_id, &signer)?;
                 println!("Unlinked issue {} from context {}", short_id(&issue_id), short_id(&context_id));
             }
             if let Some(p) = patch {
-                let patch_id = resolve_id(&p)?;
+                let patch_id = resolve_cob_id(&p)?;
                 ctx.unlink_patch(patch_id, &signer)?;
                 println!("Unlinked patch {} from context {}", short_id(&patch_id), short_id(&context_id));
             }
             if let Some(pl) = plan {
-                let plan_id = resolve_id(&pl)?;
+                let plan_id = resolve_cob_id(&pl)?;
                 ctx.unlink_plan(plan_id, &signer)?;
                 println!("Unlinked plan {} from context {}", short_id(&plan_id), short_id(&context_id));
             }
@@ -443,9 +443,48 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Parse an object ID from a string.
-fn resolve_id(s: &str) -> Result<ContextId, Box<dyn std::error::Error>> {
+/// Parse a COB ID from a string (requires full 40-char hex ID).
+/// Used for external COB references (issues, patches, plans).
+fn resolve_cob_id(s: &str) -> Result<ObjectId, Box<dyn std::error::Error>> {
     ObjectId::from_str(s).map_err(|e| format!("Invalid ID '{s}': {e}").into())
+}
+
+/// Resolve a context ID prefix against the contexts store.
+fn resolve_context_id_from_store<R>(s: &str, contexts: &Contexts<R>) -> Result<ContextId, Box<dyn std::error::Error>>
+where
+    R: radicle::prelude::ReadRepository + radicle::cob::Store,
+{
+    // Try full ID first
+    if let Ok(id) = ObjectId::from_str(s) {
+        return Ok(id);
+    }
+
+    // Validate hex prefix
+    let prefix = s.to_lowercase();
+    if prefix.is_empty() || !prefix.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("Invalid context ID '{s}': not a valid hex string").into());
+    }
+
+    // Search all contexts for prefix matches
+    let mut matches: Vec<ObjectId> = Vec::new();
+    for result in contexts.all()? {
+        let (id, _context) = result?;
+        if id.to_string().starts_with(&prefix) {
+            matches.push(id);
+        }
+    }
+
+    match matches.len() {
+        0 => Err(format!("No context found matching prefix '{s}'").into()),
+        1 => Ok(matches[0]),
+        n => {
+            let ids: Vec<String> = matches.iter().map(|id| short_id(id)).collect();
+            Err(format!(
+                "Ambiguous context ID prefix '{s}': {n} contexts match ({})",
+                ids.join(", ")
+            ).into())
+        }
+    }
 }
 
 /// Get a short form of an object ID.
