@@ -1,7 +1,7 @@
 //! rad-context CLI tool for managing Context COBs.
 //!
 //! Usage:
-//!   rad-context create <title> [--description <desc>] [--approach <approach>] [--json] [--no-auto-files] [--auto-link-commits <ref>]
+//!   rad-context create <title> [--description <desc>] [--approach <approach>] [--task <id>] [--json] [--no-auto-files] [--auto-link-commits <ref>]
 //!   rad-context list
 //!   rad-context show <id> [--json]
 //!   rad-context link <id> [--commit <sha>] [--issue <id>] [--patch <id>] [--plan <id>]
@@ -23,7 +23,7 @@ use radicle::rad;
 use radicle::storage::git::Repository;
 use radicle::storage::ReadStorage;
 
-use radicle_context_cob::{Contexts, LearningsSummary, TYPENAME};
+use radicle_context_cob::{Contexts, LearningsSummary, VerificationResult, TYPENAME};
 
 /// rad-context: Manage AI session context as Radicle COBs
 #[derive(Parser)]
@@ -68,6 +68,10 @@ enum Commands {
         /// Files touched (can be specified multiple times)
         #[arg(long)]
         file: Vec<String>,
+
+        /// Plan task ID this context was produced for
+        #[arg(long = "task")]
+        task_id: Option<String>,
 
         /// Read context as JSON from stdin
         #[arg(long)]
@@ -141,7 +145,11 @@ enum Commands {
 }
 
 /// JSON input format for creating a context from stdin.
-#[derive(Deserialize)]
+///
+/// Uses `deny_unknown_fields` so misspelled keys produce a clear error
+/// instead of being silently ignored (agents can self-correct from the message).
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct JsonContextInput {
     title: String,
     #[serde(default)]
@@ -158,6 +166,26 @@ struct JsonContextInput {
     open_items: Vec<String>,
     #[serde(default)]
     files_touched: BTreeSet<String>,
+    #[serde(default)]
+    verification: Vec<VerificationResult>,
+    #[serde(default)]
+    task_id: Option<String>,
+}
+
+/// Validate that a parsed JSON context has meaningful content.
+/// Returns a list of problems; empty means valid.
+fn validate_json_context(input: &JsonContextInput) -> Vec<String> {
+    let mut errors = Vec::new();
+    if input.title.trim().is_empty() {
+        errors.push("'title' must not be empty".to_string());
+    }
+    if input.description.trim().is_empty() {
+        errors.push("'description' is required — summarize what this session accomplished".to_string());
+    }
+    if input.approach.trim().is_empty() {
+        errors.push("'approach' is required — explain what was tried and why".to_string());
+    }
+    errors
 }
 
 fn main() -> ExitCode {
@@ -194,6 +222,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             friction,
             open_item,
             file,
+            task_id,
             json,
             no_auto_files,
             auto_link_commits,
@@ -201,10 +230,18 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let mut contexts = Contexts::open(&repo)?;
             let signer = profile.signer()?;
 
-            let (ctx_title, ctx_description, ctx_approach, ctx_constraints, ctx_learnings, ctx_friction, ctx_open_items, mut ctx_files) = if json {
+            let (ctx_title, ctx_description, ctx_approach, ctx_constraints, ctx_learnings, ctx_friction, ctx_open_items, mut ctx_files, ctx_verification, ctx_task_id) = if json {
                 let mut input = String::new();
                 std::io::stdin().read_to_string(&mut input)?;
                 let parsed: JsonContextInput = serde_json::from_str(&input)?;
+                let problems = validate_json_context(&parsed);
+                if !problems.is_empty() {
+                    let msg = problems.iter()
+                        .map(|p| format!("  - {p}"))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+                    return Err(format!("JSON validation failed:\n{msg}").into());
+                }
                 (
                     parsed.title,
                     parsed.description,
@@ -214,6 +251,8 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     parsed.friction,
                     parsed.open_items,
                     parsed.files_touched,
+                    parsed.verification,
+                    parsed.task_id,
                 )
             } else {
                 let t = title.ok_or("title is required (provide as argument or use --json)")?;
@@ -226,6 +265,8 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     friction,
                     open_item,
                     BTreeSet::from_iter(file),
+                    vec![],
+                    task_id,
                 )
             };
 
@@ -246,6 +287,8 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 ctx_friction,
                 ctx_open_items,
                 ctx_files,
+                ctx_verification,
+                ctx_task_id,
                 vec![],
                 &signer,
             )?;
@@ -382,6 +425,29 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     println!();
                     for f in context.files_touched() {
                         println!("- {f}");
+                    }
+                    println!();
+                }
+
+                if let Some(tid) = context.task_id() {
+                    println!("Task: {tid}");
+                    println!();
+                }
+
+                if !context.verification().is_empty() {
+                    println!("## Verification");
+                    println!();
+                    for vr in context.verification() {
+                        let tag = match &vr.result {
+                            radicle_context_cob::CheckResult::Pass => "PASS",
+                            radicle_context_cob::CheckResult::Fail => "FAIL",
+                            radicle_context_cob::CheckResult::Skip => "SKIP",
+                        };
+                        if let Some(note) = &vr.note {
+                            println!("- [{tag}] {}: {note}", vr.check);
+                        } else {
+                            println!("- [{tag}] {}", vr.check);
+                        }
                     }
                     println!();
                 }
@@ -770,5 +836,61 @@ mod tests {
         let (repo, base_oid) = temp_repo_with_commit(&[("a.txt", "1")]);
         let result = commits_since(&repo, base_oid).unwrap();
         assert!(result.is_empty(), "no commits after base");
+    }
+
+    #[test]
+    fn test_json_input_rejects_unknown_fields() {
+        let json = r#"{"title":"t","description":"d","approach":"a","typoField":"oops"}"#;
+        let result: Result<JsonContextInput, _> = serde_json::from_str(json);
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("unknown field"), "expected unknown field error, got: {err}");
+    }
+
+    #[test]
+    fn test_json_input_accepts_camel_case() {
+        let json = r#"{"title":"t","description":"d","approach":"a","filesTouched":["src/lib.rs"],"openItems":["todo"],"taskId":"abc"}"#;
+        let parsed: JsonContextInput = serde_json::from_str(json).expect("should accept camelCase");
+        assert!(parsed.files_touched.contains("src/lib.rs"));
+        assert_eq!(parsed.open_items, vec!["todo"]);
+        assert_eq!(parsed.task_id.as_deref(), Some("abc"));
+    }
+
+    #[test]
+    fn test_validate_json_context_missing_required() {
+        let input = JsonContextInput {
+            title: String::new(),
+            description: String::new(),
+            approach: String::new(),
+            constraints: vec![],
+            learnings: LearningsSummary::default(),
+            friction: vec![],
+            open_items: vec![],
+            files_touched: BTreeSet::new(),
+            verification: vec![],
+            task_id: None,
+        };
+        let errors = validate_json_context(&input);
+        assert_eq!(errors.len(), 3);
+        assert!(errors[0].contains("title"));
+        assert!(errors[1].contains("description"));
+        assert!(errors[2].contains("approach"));
+    }
+
+    #[test]
+    fn test_validate_json_context_valid() {
+        let input = JsonContextInput {
+            title: "a title".to_string(),
+            description: "a description".to_string(),
+            approach: "an approach".to_string(),
+            constraints: vec![],
+            learnings: LearningsSummary::default(),
+            friction: vec![],
+            open_items: vec![],
+            files_touched: BTreeSet::new(),
+            verification: vec![],
+            task_id: None,
+        };
+        let errors = validate_json_context(&input);
+        assert!(errors.is_empty());
     }
 }

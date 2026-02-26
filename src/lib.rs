@@ -36,7 +36,7 @@ use radicle::prelude::{Doc, ReadRepository, RepoId};
 use radicle::storage::{HasRepoId, RepositoryError, SignRepository, WriteRepository};
 
 pub use actions::Action;
-pub use state::{CodeLearning, Context, LearningsSummary};
+pub use state::{CheckResult, CodeLearning, Context, LearningsSummary, VerificationResult};
 
 /// Context operation.
 pub type Op = cob::Op<Action>;
@@ -95,6 +95,8 @@ impl store::Cob for Context {
             friction,
             open_items,
             files_touched,
+            verification,
+            task_id,
             embeds: _,
         }) = actions.next()
         else {
@@ -110,6 +112,8 @@ impl store::Cob for Context {
             friction,
             open_items,
             files_touched,
+            verification,
+            task_id,
             op.author.into(),
             op.timestamp,
         );
@@ -191,6 +195,8 @@ impl Context {
                 friction,
                 open_items,
                 files_touched,
+                verification,
+                task_id,
                 ..
             } => {
                 self.title = title;
@@ -201,6 +207,8 @@ impl Context {
                 self.friction = friction;
                 self.open_items = open_items;
                 self.files_touched = files_touched;
+                self.verification = verification;
+                self.task_id = task_id;
             }
             Action::LinkCommit { sha } => {
                 self.related_commits.insert(sha);
@@ -307,6 +315,8 @@ where
         friction: Vec<String>,
         open_items: Vec<String>,
         files_touched: BTreeSet<String>,
+        verification: Vec<state::VerificationResult>,
+        task_id: Option<String>,
         embeds: Vec<Embed<Uri>>,
         signer: &Device<G>,
     ) -> Result<(ObjectId, Context), Error>
@@ -324,6 +334,8 @@ where
             friction,
             open_items,
             files_touched,
+            verification,
+            task_id,
             embeds: embeds.clone(),
         };
         let actions = NonEmpty::new(action);

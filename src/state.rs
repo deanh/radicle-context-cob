@@ -35,6 +35,31 @@ pub struct LearningsSummary {
     pub code: Vec<CodeLearning>,
 }
 
+/// Result of a single verification check.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CheckResult {
+    /// Check passed.
+    Pass,
+    /// Check failed.
+    Fail,
+    /// Check was skipped.
+    Skip,
+}
+
+/// A single verification result from a development session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VerificationResult {
+    /// Name of the check (e.g. "cargo test", "clippy").
+    pub check: String,
+    /// Outcome of the check.
+    pub result: CheckResult,
+    /// Optional note with details.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+}
+
 /// Context state. Accumulates [`Action`](crate::Action).
 ///
 /// Represents an observation record from an AI-assisted development session.
@@ -64,6 +89,12 @@ pub struct Context {
     /// Which files were actually modified.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub(crate) files_touched: BTreeSet<String>,
+    /// Structured verification results from the session.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) verification: Vec<VerificationResult>,
+    /// Plan task ID that produced this context.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) task_id: Option<String>,
     /// Git commits this context produced.
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub(crate) related_commits: BTreeSet<String>,
@@ -94,6 +125,8 @@ impl Context {
         friction: Vec<String>,
         open_items: Vec<String>,
         files_touched: BTreeSet<String>,
+        verification: Vec<VerificationResult>,
+        task_id: Option<String>,
         author: Author,
         timestamp: Timestamp,
     ) -> Self {
@@ -106,6 +139,8 @@ impl Context {
             friction,
             open_items,
             files_touched,
+            verification,
+            task_id,
             related_commits: BTreeSet::new(),
             related_issues: BTreeSet::new(),
             related_patches: BTreeSet::new(),
@@ -153,6 +188,16 @@ impl Context {
     /// Get the files touched.
     pub fn files_touched(&self) -> &BTreeSet<String> {
         &self.files_touched
+    }
+
+    /// Get the verification results.
+    pub fn verification(&self) -> &[VerificationResult] {
+        &self.verification
+    }
+
+    /// Get the task ID.
+    pub fn task_id(&self) -> Option<&str> {
+        self.task_id.as_deref()
     }
 
     /// Get the related commits.
@@ -252,5 +297,42 @@ mod tests {
         let deserialized: LearningsSummary =
             serde_json::from_str(&json).expect("deserialization failed");
         assert_eq!(summary, deserialized);
+    }
+
+    #[test]
+    fn test_verification_result_serde() {
+        let vr = VerificationResult {
+            check: "cargo test".to_string(),
+            result: CheckResult::Pass,
+            note: Some("all 21 tests passed".to_string()),
+        };
+
+        let json = serde_json::to_string(&vr).expect("serialization failed");
+        let deserialized: VerificationResult =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(vr, deserialized);
+    }
+
+    #[test]
+    fn test_verification_result_without_note() {
+        let vr = VerificationResult {
+            check: "clippy".to_string(),
+            result: CheckResult::Fail,
+            note: None,
+        };
+
+        let json = serde_json::to_string(&vr).expect("serialization failed");
+        assert!(!json.contains("note"), "note should be omitted when None");
+
+        let deserialized: VerificationResult =
+            serde_json::from_str(&json).expect("deserialization failed");
+        assert_eq!(vr, deserialized);
+    }
+
+    #[test]
+    fn test_check_result_lowercase_serialization() {
+        assert_eq!(serde_json::to_string(&CheckResult::Pass).unwrap(), "\"pass\"");
+        assert_eq!(serde_json::to_string(&CheckResult::Fail).unwrap(), "\"fail\"");
+        assert_eq!(serde_json::to_string(&CheckResult::Skip).unwrap(), "\"skip\"");
     }
 }

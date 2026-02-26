@@ -8,7 +8,7 @@ use radicle::cob::common::Uri;
 use radicle::cob::store::CobAction;
 use radicle::cob::{Embed, ObjectId};
 
-use crate::state::LearningsSummary;
+use crate::state::{LearningsSummary, VerificationResult};
 
 /// Context action. Represents all possible mutations to a context's state.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -40,6 +40,12 @@ pub enum Action {
         /// Which files were actually modified.
         #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
         files_touched: BTreeSet<String>,
+        /// Structured verification results from the session.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        verification: Vec<VerificationResult>,
+        /// Plan task ID that produced this context.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        task_id: Option<String>,
         /// Embedded content (e.g. session transcripts as git blobs).
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         embeds: Vec<Embed<Uri>>,
@@ -124,6 +130,8 @@ mod tests {
             friction: vec!["Type errors with async middleware".to_string()],
             open_items: vec![],
             files_touched: BTreeSet::from(["src/auth.rs".to_string()]),
+            verification: vec![],
+            task_id: None,
             embeds: vec![],
         };
 
@@ -182,6 +190,8 @@ mod tests {
             friction: vec![],
             open_items: vec![],
             files_touched: BTreeSet::new(),
+            verification: vec![],
+            task_id: None,
             embeds: vec![],
         };
         assert!(!open.produces_identifier());
@@ -190,5 +200,23 @@ mod tests {
             sha: "abc".to_string(),
         };
         assert!(!link.produces_identifier());
+    }
+
+    #[test]
+    fn test_open_action_backward_compat() {
+        // Old JSON without verification/taskId should deserialize with defaults
+        let json = r#"{"type":"open","title":"test"}"#;
+        let action: Action = serde_json::from_str(json).expect("deserialization failed");
+        match action {
+            Action::Open {
+                verification,
+                task_id,
+                ..
+            } => {
+                assert!(verification.is_empty());
+                assert!(task_id.is_none());
+            }
+            _ => panic!("expected Open action"),
+        }
     }
 }
