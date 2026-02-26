@@ -16,12 +16,14 @@ use std::str::FromStr;
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
 
-use radicle::cob::ObjectId;
+use radicle::cob::{self, ObjectId, TypeName};
+use radicle::prelude::ReadRepository;
 use radicle::profile::Profile;
 use radicle::rad;
+use radicle::storage::git::Repository;
 use radicle::storage::ReadStorage;
 
-use radicle_context_cob::{ContextId, Contexts, LearningsSummary};
+use radicle_context_cob::{Contexts, LearningsSummary, TYPENAME};
 
 /// rad-context: Manage AI session context as Radicle COBs
 #[derive(Parser)]
@@ -261,7 +263,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Show { id, json } => {
             let contexts = Contexts::open(&repo)?;
-            let context_id = resolve_context_id_from_store(&id, &contexts)?;
+            let context_id = resolve_cob_prefix(&id, &TYPENAME, &repo)?;
 
             let Some(context) = contexts.get(&context_id)? else {
                 return Err(format!("Context not found: {id}").into());
@@ -385,55 +387,65 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Link { id, commit, issue, patch, plan } => {
+            let issue_type = TypeName::from_str("xyz.radicle.issue")?;
+            let patch_type = TypeName::from_str("xyz.radicle.patch")?;
+            let plan_type = TypeName::from_str("me.hdh.plan")?;
+
             let mut contexts = Contexts::open(&repo)?;
-            let context_id = resolve_context_id_from_store(&id, &contexts)?;
+            let context_id = resolve_cob_prefix(&id, &TYPENAME, &repo)?;
             let signer = profile.signer()?;
 
             let mut ctx = contexts.get_mut(&context_id)?;
 
             if let Some(sha) = commit {
-                ctx.link_commit(sha.clone(), &signer)?;
-                println!("Linked commit {} to context {}", sha, short_id(&context_id));
+                let full_sha = resolve_commit_sha(&sha, &repo)?;
+                ctx.link_commit(full_sha.clone(), &signer)?;
+                println!("Linked commit {} to context {}", &full_sha[..7], short_id(&context_id));
             }
             if let Some(i) = issue {
-                let issue_id = resolve_cob_id(&i)?;
+                let issue_id = resolve_cob_prefix(&i, &issue_type, &repo)?;
                 ctx.link_issue(issue_id, &signer)?;
                 println!("Linked issue {} to context {}", short_id(&issue_id), short_id(&context_id));
             }
             if let Some(p) = patch {
-                let patch_id = resolve_cob_id(&p)?;
+                let patch_id = resolve_cob_prefix(&p, &patch_type, &repo)?;
                 ctx.link_patch(patch_id, &signer)?;
                 println!("Linked patch {} to context {}", short_id(&patch_id), short_id(&context_id));
             }
             if let Some(pl) = plan {
-                let plan_id = resolve_cob_id(&pl)?;
+                let plan_id = resolve_cob_prefix(&pl, &plan_type, &repo)?;
                 ctx.link_plan(plan_id, &signer)?;
                 println!("Linked plan {} to context {}", short_id(&plan_id), short_id(&context_id));
             }
         }
         Commands::Unlink { id, commit, issue, patch, plan } => {
+            let issue_type = TypeName::from_str("xyz.radicle.issue")?;
+            let patch_type = TypeName::from_str("xyz.radicle.patch")?;
+            let plan_type = TypeName::from_str("me.hdh.plan")?;
+
             let mut contexts = Contexts::open(&repo)?;
-            let context_id = resolve_context_id_from_store(&id, &contexts)?;
+            let context_id = resolve_cob_prefix(&id, &TYPENAME, &repo)?;
             let signer = profile.signer()?;
 
             let mut ctx = contexts.get_mut(&context_id)?;
 
             if let Some(sha) = commit {
-                ctx.unlink_commit(sha.clone(), &signer)?;
-                println!("Unlinked commit {} from context {}", sha, short_id(&context_id));
+                let full_sha = resolve_commit_sha(&sha, &repo)?;
+                ctx.unlink_commit(full_sha.clone(), &signer)?;
+                println!("Unlinked commit {} from context {}", &full_sha[..7], short_id(&context_id));
             }
             if let Some(i) = issue {
-                let issue_id = resolve_cob_id(&i)?;
+                let issue_id = resolve_cob_prefix(&i, &issue_type, &repo)?;
                 ctx.unlink_issue(issue_id, &signer)?;
                 println!("Unlinked issue {} from context {}", short_id(&issue_id), short_id(&context_id));
             }
             if let Some(p) = patch {
-                let patch_id = resolve_cob_id(&p)?;
+                let patch_id = resolve_cob_prefix(&p, &patch_type, &repo)?;
                 ctx.unlink_patch(patch_id, &signer)?;
                 println!("Unlinked patch {} from context {}", short_id(&patch_id), short_id(&context_id));
             }
             if let Some(pl) = plan {
-                let plan_id = resolve_cob_id(&pl)?;
+                let plan_id = resolve_cob_prefix(&pl, &plan_type, &repo)?;
                 ctx.unlink_plan(plan_id, &signer)?;
                 println!("Unlinked plan {} from context {}", short_id(&plan_id), short_id(&context_id));
             }
@@ -443,52 +455,134 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Parse a COB ID from a string (requires full 40-char hex ID).
-/// Used for external COB references (issues, patches, plans).
-fn resolve_cob_id(s: &str) -> Result<ObjectId, Box<dyn std::error::Error>> {
-    ObjectId::from_str(s).map_err(|e| format!("Invalid ID '{s}': {e}").into())
+/// Minimum prefix length for COB ID resolution.
+const MIN_PREFIX_LEN: usize = 7;
+
+/// Validate and normalize a hex prefix string.
+/// Returns `Ok(lowercase_prefix)` if valid, or an error describing the problem.
+fn validate_hex_prefix(s: &str, label: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let prefix = s.to_lowercase();
+    if !prefix.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!("Invalid {label} '{s}': not a valid hex string").into());
+    }
+    if prefix.len() < MIN_PREFIX_LEN {
+        return Err(format!(
+            "{label} prefix '{s}' too short: need at least {MIN_PREFIX_LEN} characters"
+        )
+        .into());
+    }
+    Ok(prefix)
 }
 
-/// Resolve a context ID prefix against the contexts store.
-fn resolve_context_id_from_store<R>(s: &str, contexts: &Contexts<R>) -> Result<ContextId, Box<dyn std::error::Error>>
+/// Resolve a COB ID from a full ID or short prefix by enumerating refs of the given type.
+fn resolve_cob_prefix<R>(
+    s: &str,
+    type_name: &TypeName,
+    repo: &R,
+) -> Result<ObjectId, Box<dyn std::error::Error>>
 where
-    R: radicle::prelude::ReadRepository + radicle::cob::Store,
+    R: ReadRepository + cob::Store,
 {
     // Try full ID first
     if let Ok(id) = ObjectId::from_str(s) {
         return Ok(id);
     }
 
-    // Validate hex prefix
-    let prefix = s.to_lowercase();
-    if prefix.is_empty() || !prefix.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(format!("Invalid context ID '{s}': not a valid hex string").into());
-    }
+    let prefix = validate_hex_prefix(s, "ID")?;
 
-    // Search all contexts for prefix matches
-    let mut matches: Vec<ObjectId> = Vec::new();
-    for result in contexts.all()? {
-        let (id, _context) = result?;
-        if id.to_string().starts_with(&prefix) {
-            matches.push(id);
-        }
-    }
+    // Enumerate all objects of this type and prefix-match
+    let all = repo.types(type_name)?;
+    let matches: Vec<ObjectId> = all
+        .keys()
+        .filter(|id| id.to_string().starts_with(&prefix))
+        .copied()
+        .collect();
 
     match matches.len() {
-        0 => Err(format!("No context found matching prefix '{s}'").into()),
+        0 => Err(format!("No {type_name} found matching prefix '{s}'").into()),
         1 => Ok(matches[0]),
         n => {
             let ids: Vec<String> = matches.iter().map(|id| short_id(id)).collect();
             Err(format!(
-                "Ambiguous context ID prefix '{s}': {n} contexts match ({})",
+                "Ambiguous {type_name} ID prefix '{s}': {n} objects match ({})",
                 ids.join(", ")
-            ).into())
+            )
+            .into())
         }
     }
+}
+
+/// Resolve a commit SHA prefix to a full SHA using git object lookup.
+fn resolve_commit_sha(s: &str, repo: &Repository) -> Result<String, Box<dyn std::error::Error>> {
+    // If it looks like a full SHA already, pass it through
+    if s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Ok(s.to_string());
+    }
+
+    let prefix = validate_hex_prefix(s, "commit SHA")?;
+
+    // Use git2's revparse to resolve the prefix
+    let object = repo
+        .backend
+        .revparse_single(&prefix)
+        .map_err(|_| format!("No commit found matching prefix '{s}'"))?;
+
+    Ok(object.id().to_string())
 }
 
 /// Get a short form of an object ID.
 fn short_id(id: &ObjectId) -> String {
     let s = id.to_string();
     s[..7.min(s.len())].to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_hex_prefix_valid() {
+        let result = validate_hex_prefix("abc1234", "ID");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "abc1234");
+    }
+
+    #[test]
+    fn test_validate_hex_prefix_uppercase_normalized() {
+        let result = validate_hex_prefix("ABC1234", "ID");
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "abc1234");
+    }
+
+    #[test]
+    fn test_validate_hex_prefix_too_short() {
+        let result = validate_hex_prefix("abc12", "ID");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too short"));
+    }
+
+    #[test]
+    fn test_validate_hex_prefix_exactly_min_length() {
+        let result = validate_hex_prefix("abcdef1", "ID");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_hex_prefix_non_hex() {
+        let result = validate_hex_prefix("xyz1234", "ID");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not a valid hex"));
+    }
+
+    #[test]
+    fn test_validate_hex_prefix_empty() {
+        let result = validate_hex_prefix("", "ID");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_hex_prefix_label_in_error() {
+        let result = validate_hex_prefix("xyz", "commit SHA");
+        assert!(result.unwrap_err().to_string().contains("commit SHA"));
+    }
 }
