@@ -613,8 +613,10 @@ where
 
 /// Resolve a commit SHA prefix to a full SHA using git object lookup.
 fn resolve_commit_sha(s: &str, repo: &Repository) -> Result<String, Box<dyn std::error::Error>> {
-    // If it looks like a full SHA already, pass it through
+    // If it looks like a full SHA already, validate and pass it through
     if s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit()) {
+        radicle::git::raw::Oid::from_str(s)
+            .map_err(|e| format!("Invalid commit SHA '{s}': {e}"))?;
         return Ok(s.to_string());
     }
 
