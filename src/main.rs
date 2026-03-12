@@ -526,7 +526,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 ctx.link_commit(full_sha.clone(), &signer)?;
                 println!(
                     "Linked commit {} to context {}",
-                    &full_sha[..7],
+                    full_sha.get(..7).unwrap_or(&full_sha),
                     short_id(&context_id)
                 );
             }
@@ -580,7 +580,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 ctx.unlink_commit(full_sha.clone(), &signer)?;
                 println!(
                     "Unlinked commit {} from context {}",
-                    &full_sha[..7],
+                    full_sha.get(..7).unwrap_or(&full_sha),
                     short_id(&context_id)
                 );
             }
@@ -660,13 +660,14 @@ where
         .copied()
         .collect();
 
-    match matches.len() {
-        0 => Err(format!("No {type_name} found matching prefix '{s}'").into()),
-        1 => Ok(matches[0]),
-        n => {
-            let ids: Vec<String> = matches.iter().map(short_id).collect();
+    match matches.as_slice() {
+        [] => Err(format!("No {type_name} found matching prefix '{s}'").into()),
+        [single] => Ok(*single),
+        multiple => {
+            let ids: Vec<String> = multiple.iter().map(short_id).collect();
             Err(format!(
-                "Ambiguous {type_name} ID prefix '{s}': {n} objects match ({})",
+                "Ambiguous {type_name} ID prefix '{s}': {} objects match ({})",
+                multiple.len(),
                 ids.join(", ")
             )
             .into())
@@ -697,7 +698,7 @@ fn resolve_commit_sha(s: &str, repo: &Repository) -> Result<String, Box<dyn std:
 /// Get a short form of an object ID.
 fn short_id(id: &ObjectId) -> String {
     let s = id.to_string();
-    s[..7.min(s.len())].to_string()
+    s.get(..7).unwrap_or(&s).to_string()
 }
 
 /// Collect file paths changed in the HEAD commit by diffing against its parent.
