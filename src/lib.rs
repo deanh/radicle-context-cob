@@ -64,7 +64,7 @@ pub enum Error {
     Repository(#[from] RepositoryError),
     /// Action not authorized.
     #[error("{0} not authorized to apply {1:?}")]
-    NotAuthorized(ActorId, Action),
+    NotAuthorized(ActorId, Box<Action>),
     /// Identity document is missing.
     #[error("identity document missing")]
     MissingIdentity,
@@ -129,7 +129,7 @@ impl store::Cob for Context {
                     context.apply_action(action, op.timestamp);
                 }
                 Authorization::Deny => {
-                    return Err(Error::NotAuthorized(op.author, action));
+                    return Err(Error::NotAuthorized(op.author, Box::new(action)));
                 }
                 Authorization::Unknown => {
                     continue;
@@ -156,7 +156,7 @@ impl store::Cob for Context {
                     self.apply_action(action, op.timestamp);
                 }
                 Authorization::Deny => {
-                    return Err(Error::NotAuthorized(op.author, action));
+                    return Err(Error::NotAuthorized(op.author, Box::new(action)));
                 }
                 Authorization::Unknown => {
                     continue;
