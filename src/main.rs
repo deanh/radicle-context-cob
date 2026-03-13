@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::str::FromStr;
 
+use anyhow::{bail, Context as _};
 use clap::{Parser, Subcommand};
 use serde::Deserialize;
 
@@ -207,7 +208,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+fn run(cli: Cli) -> anyhow::Result<()> {
     let profile = Profile::load()?;
 
     let (_, rid) = if let Some(path) = cli.repo {
@@ -257,7 +258,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                         .map(|p| format!("  - {p}"))
                         .collect::<Vec<_>>()
                         .join("\n");
-                    return Err(format!("JSON validation failed:\n{msg}").into());
+                    bail!("JSON validation failed:\n{msg}");
                 }
                 (
                     parsed.title,
@@ -272,7 +273,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     parsed.task_id,
                 )
             } else {
-                let t = title.ok_or("title is required (provide as argument or use --json)")?;
+                let t = title.context("title is required (provide as argument or use --json)")?;
                 (
                     t,
                     description.unwrap_or_default(),
@@ -359,7 +360,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let context_id = resolve_cob_prefix(&id, &TYPENAME, &repo)?;
 
             let Some(context) = contexts.get(&context_id)? else {
-                return Err(format!("Context not found: {id}").into());
+                bail!("Context not found: {id}");
             };
 
             if json {
@@ -622,26 +623,19 @@ const MIN_PREFIX_LEN: usize = 7;
 
 /// Validate and normalize a hex prefix string.
 /// Returns `Ok(lowercase_prefix)` if valid, or an error describing the problem.
-fn validate_hex_prefix(s: &str, label: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn validate_hex_prefix(s: &str, label: &str) -> anyhow::Result<String> {
     let prefix = s.to_lowercase();
     if !prefix.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(format!("Invalid {label} '{s}': not a valid hex string").into());
+        bail!("Invalid {label} '{s}': not a valid hex string");
     }
     if prefix.len() < MIN_PREFIX_LEN {
-        return Err(format!(
-            "{label} prefix '{s}' too short: need at least {MIN_PREFIX_LEN} characters"
-        )
-        .into());
+        bail!("{label} prefix '{s}' too short: need at least {MIN_PREFIX_LEN} characters");
     }
     Ok(prefix)
 }
 
 /// Resolve a COB ID from a full ID or short prefix by enumerating refs of the given type.
-fn resolve_cob_prefix<R>(
-    s: &str,
-    type_name: &TypeName,
-    repo: &R,
-) -> Result<ObjectId, Box<dyn std::error::Error>>
+fn resolve_cob_prefix<R>(s: &str, type_name: &TypeName, repo: &R) -> anyhow::Result<ObjectId>
 where
     R: ReadRepository + cob::Store,
 {
@@ -661,26 +655,24 @@ where
         .collect();
 
     match matches.as_slice() {
-        [] => Err(format!("No {type_name} found matching prefix '{s}'").into()),
+        [] => bail!("No {type_name} found matching prefix '{s}'"),
         [single] => Ok(*single),
         multiple => {
             let ids: Vec<String> = multiple.iter().map(short_id).collect();
-            Err(format!(
+            bail!(
                 "Ambiguous {type_name} ID prefix '{s}': {} objects match ({})",
                 multiple.len(),
                 ids.join(", ")
             )
-            .into())
         }
     }
 }
 
 /// Resolve a commit SHA prefix to a full SHA using git object lookup.
-fn resolve_commit_sha(s: &str, repo: &Repository) -> Result<String, Box<dyn std::error::Error>> {
+fn resolve_commit_sha(s: &str, repo: &Repository) -> anyhow::Result<String> {
     // If it looks like a full SHA already, validate and pass it through
     if s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit()) {
-        radicle::git::raw::Oid::from_str(s)
-            .map_err(|e| format!("Invalid commit SHA '{s}': {e}"))?;
+        radicle::git::raw::Oid::from_str(s).with_context(|| format!("Invalid commit SHA '{s}'"))?;
         return Ok(s.to_string());
     }
 
@@ -690,7 +682,7 @@ fn resolve_commit_sha(s: &str, repo: &Repository) -> Result<String, Box<dyn std:
     let object = repo
         .backend
         .revparse_single(&prefix)
-        .map_err(|_| format!("No commit found matching prefix '{s}'"))?;
+        .with_context(|| format!("No commit found matching prefix '{s}'"))?;
 
     Ok(object.id().to_string())
 }
@@ -731,7 +723,7 @@ fn files_from_head(git: &radicle::git::raw::Repository) -> BTreeSet<String> {
 fn commits_since(
     git: &radicle::git::raw::Repository,
     since_oid: radicle::git::raw::Oid,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Vec<String>> {
     let head_oid = git.head()?.peel_to_commit()?.id();
     let mut revwalk = git.revwalk()?;
     revwalk.push(head_oid)?;

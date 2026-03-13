@@ -32,6 +32,7 @@ thiserror = { version = "2", default-features = false }
 nonempty = "0.9.0"
 
 # CLI
+anyhow = "1"
 clap = { version = "4.0", features = ["derive"] }
 
 # Logging
