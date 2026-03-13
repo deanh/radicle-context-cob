@@ -115,6 +115,7 @@ pub struct Context {
 
 impl Context {
     /// Create a new context.
+    #[must_use]
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         title: String,
@@ -151,81 +152,97 @@ impl Context {
     }
 
     /// Get the context title.
+    #[must_use]
     pub fn title(&self) -> &str {
         &self.title
     }
 
     /// Get the context description.
+    #[must_use]
     pub fn description(&self) -> &str {
         &self.description
     }
 
     /// Get the approach taken.
+    #[must_use]
     pub fn approach(&self) -> &str {
         &self.approach
     }
 
     /// Get the constraints.
+    #[must_use]
     pub fn constraints(&self) -> &[String] {
         &self.constraints
     }
 
     /// Get the learnings summary.
+    #[must_use]
     pub fn learnings(&self) -> &LearningsSummary {
         &self.learnings
     }
 
     /// Get the friction points.
+    #[must_use]
     pub fn friction(&self) -> &[String] {
         &self.friction
     }
 
     /// Get the open items.
+    #[must_use]
     pub fn open_items(&self) -> &[String] {
         &self.open_items
     }
 
     /// Get the files touched.
+    #[must_use]
     pub fn files_touched(&self) -> &BTreeSet<String> {
         &self.files_touched
     }
 
     /// Get the verification results.
+    #[must_use]
     pub fn verification(&self) -> &[VerificationResult] {
         &self.verification
     }
 
     /// Get the task ID.
+    #[must_use]
     pub fn task_id(&self) -> Option<&str> {
         self.task_id.as_deref()
     }
 
     /// Get the related commits.
+    #[must_use]
     pub fn related_commits(&self) -> &BTreeSet<String> {
         &self.related_commits
     }
 
     /// Get the related issues.
+    #[must_use]
     pub fn related_issues(&self) -> &BTreeSet<ObjectId> {
         &self.related_issues
     }
 
     /// Get the related patches.
+    #[must_use]
     pub fn related_patches(&self) -> &BTreeSet<ObjectId> {
         &self.related_patches
     }
 
     /// Get the related plans.
+    #[must_use]
     pub fn related_plans(&self) -> &BTreeSet<ObjectId> {
         &self.related_plans
     }
 
     /// Get the context author.
+    #[must_use]
     pub fn author(&self) -> &Author {
         &self.author
     }
 
     /// Get when the context was created.
+    #[must_use]
     pub fn created_at(&self) -> Timestamp {
         self.created_at
     }

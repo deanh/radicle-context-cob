@@ -45,6 +45,7 @@ pub type Op = cob::Op<Action>;
 
 /// Type name of a context COB.
 pub static TYPENAME: LazyLock<TypeName> =
+    // SAFETY: "me.hdh.context" is a valid reverse-domain type name literal.
     LazyLock::new(|| FromStr::from_str("me.hdh.context").expect("type name is valid"));
 
 /// Identifier for a context.
@@ -52,6 +53,7 @@ pub type ContextId = ObjectId;
 
 /// Error updating or creating contexts.
 #[derive(Error, Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Error loading the identity document.
     #[error("identity doc failed to load: {0}")]
@@ -410,6 +412,7 @@ where
     R: WriteRepository + SignRepository + cob::Store<Namespace = NodeId>,
 {
     /// Get the context ID.
+    #[must_use]
     pub fn id(&self) -> &ObjectId {
         &self.id
     }
