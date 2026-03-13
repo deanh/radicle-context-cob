@@ -104,7 +104,7 @@ impl store::Cob for Context {
             files_touched,
             verification,
             task_id,
-            embeds: _,
+            ..
         }) = actions.next()
         else {
             return Err(Error::Init("the first action must be of type `Open`"));
