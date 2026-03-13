@@ -38,6 +38,16 @@ clap = { version = "4.0", features = ["derive"] }
 log = "0.4"
 env_logger = "0.11"
 
+[lints.clippy]
+type_complexity = "allow"
+enum_variant_names = "allow"
+indexing_slicing = "deny"
+fallible_impl_from = "deny"
+wildcard_enum_match_arm = "deny"
+unneeded_field_pattern = "deny"
+fn_params_excessive_bools = "deny"
+must_use_candidate = "deny"
+
 [dev-dependencies]
 pretty_assertions = "1.0"
 tempfile = "3"

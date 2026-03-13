@@ -960,9 +960,9 @@ mod tests {
         };
         let errors = validate_json_context(&input);
         assert_eq!(errors.len(), 3);
-        assert!(errors[0].contains("title"));
-        assert!(errors[1].contains("description"));
-        assert!(errors[2].contains("approach"));
+        assert!(errors.first().is_some_and(|e| e.contains("title")));
+        assert!(errors.get(1).is_some_and(|e| e.contains("description")));
+        assert!(errors.get(2).is_some_and(|e| e.contains("approach")));
     }
 
     #[test]

@@ -220,7 +220,14 @@ mod tests {
                 assert!(verification.is_empty());
                 assert!(task_id.is_none());
             }
-            _ => panic!("expected Open action"),
+            Action::LinkCommit { .. }
+            | Action::UnlinkCommit { .. }
+            | Action::LinkIssue { .. }
+            | Action::UnlinkIssue { .. }
+            | Action::LinkPatch { .. }
+            | Action::UnlinkPatch { .. }
+            | Action::LinkPlan { .. }
+            | Action::UnlinkPlan { .. } => panic!("expected Open action"),
         }
     }
 }
