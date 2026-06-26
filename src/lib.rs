@@ -11,8 +11,6 @@
 //!
 //! The COB type name is `me.hdh.context` following the reverse domain notation pattern.
 
-#![allow(clippy::large_enum_variant)]
-#![allow(clippy::result_large_err)]
 #![warn(clippy::unwrap_used)]
 #![warn(missing_docs)]
 

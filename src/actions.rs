@@ -11,6 +11,7 @@ use radicle::cob::{Embed, ObjectId};
 use crate::state::{LearningsSummary, VerificationResult};
 
 /// Context action. Represents all possible mutations to a context's state.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Action {
