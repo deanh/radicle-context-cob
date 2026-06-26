@@ -18,8 +18,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Radicle core - using git dependencies for portability
-radicle = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle" }
-radicle-cob = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle-cob" }
+radicle = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle", version = "0.24.0" }
+radicle-cob = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle-cob", version = "0.20.0" }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

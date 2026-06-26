@@ -1,11 +1,14 @@
 //! rad-context CLI tool for managing Context COBs.
 //!
 //! Usage:
-//!   rad-context create <title> [--description <desc>] [--approach <approach>] [--task <id>] [--json] [--no-auto-files] [--auto-link-commits <ref>]
-//!   rad-context list
-//!   rad-context show <id> [--json]
-//!   rad-context link <id> [--commit <sha>] [--issue <id>] [--patch <id>] [--plan <id>]
-//!   rad-context unlink <id> [--commit <sha>] [--issue <id>] [--patch <id>] [--plan <id>]
+//!
+//! ```text
+//! rad-context create <title> [--description <desc>] [--approach <approach>] [--task <id>] [--json] [--no-auto-files] [--auto-link-commits <ref>]
+//! rad-context list
+//! rad-context show <id> [--json]
+//! rad-context link <id> [--commit <sha>] [--issue <id>] [--patch <id>] [--plan <id>]
+//! rad-context unlink <id> [--commit <sha>] [--issue <id>] [--patch <id>] [--plan <id>]
+//! ```
 
 use std::collections::BTreeSet;
 use std::io::Read;
@@ -180,7 +183,9 @@ fn validate_json_context(input: &JsonContextInput) -> Vec<String> {
         errors.push("'title' must not be empty".to_string());
     }
     if input.description.trim().is_empty() {
-        errors.push("'description' is required — summarize what this session accomplished".to_string());
+        errors.push(
+            "'description' is required — summarize what this session accomplished".to_string(),
+        );
     }
     if input.approach.trim().is_empty() {
         errors.push("'approach' is required — explain what was tried and why".to_string());
@@ -230,13 +235,25 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let mut contexts = Contexts::open(&repo)?;
             let signer = profile.signer()?;
 
-            let (ctx_title, ctx_description, ctx_approach, ctx_constraints, ctx_learnings, ctx_friction, ctx_open_items, mut ctx_files, ctx_verification, ctx_task_id) = if json {
+            let (
+                ctx_title,
+                ctx_description,
+                ctx_approach,
+                ctx_constraints,
+                ctx_learnings,
+                ctx_friction,
+                ctx_open_items,
+                mut ctx_files,
+                ctx_verification,
+                ctx_task_id,
+            ) = if json {
                 let mut input = String::new();
                 std::io::stdin().read_to_string(&mut input)?;
                 let parsed: JsonContextInput = serde_json::from_str(&input)?;
                 let problems = validate_json_context(&parsed);
                 if !problems.is_empty() {
-                    let msg = problems.iter()
+                    let msg = problems
+                        .iter()
                         .map(|p| format!("  - {p}"))
                         .collect::<Vec<_>>()
                         .join("\n");
@@ -392,7 +409,9 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                         println!("### Code");
                         for cl in &learnings.code {
                             let location = match (cl.line, cl.end_line) {
-                                (Some(start), Some(end)) => format!("{}:{}-{}", cl.path, start, end),
+                                (Some(start), Some(end)) => {
+                                    format!("{}:{}-{}", cl.path, start, end)
+                                }
                                 (Some(start), None) => format!("{}:{}", cl.path, start),
                                 _ => cl.path.clone(),
                             };
@@ -485,7 +504,13 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        Commands::Link { id, commit, issue, patch, plan } => {
+        Commands::Link {
+            id,
+            commit,
+            issue,
+            patch,
+            plan,
+        } => {
             let issue_type = TypeName::from_str("xyz.radicle.issue")?;
             let patch_type = TypeName::from_str("xyz.radicle.patch")?;
             let plan_type = TypeName::from_str("me.hdh.plan")?;
@@ -499,25 +524,47 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             if let Some(sha) = commit {
                 let full_sha = resolve_commit_sha(&sha, &repo)?;
                 ctx.link_commit(full_sha.clone(), &signer)?;
-                println!("Linked commit {} to context {}", &full_sha[..7], short_id(&context_id));
+                println!(
+                    "Linked commit {} to context {}",
+                    &full_sha[..7],
+                    short_id(&context_id)
+                );
             }
             if let Some(i) = issue {
                 let issue_id = resolve_cob_prefix(&i, &issue_type, &repo)?;
                 ctx.link_issue(issue_id, &signer)?;
-                println!("Linked issue {} to context {}", short_id(&issue_id), short_id(&context_id));
+                println!(
+                    "Linked issue {} to context {}",
+                    short_id(&issue_id),
+                    short_id(&context_id)
+                );
             }
             if let Some(p) = patch {
                 let patch_id = resolve_cob_prefix(&p, &patch_type, &repo)?;
                 ctx.link_patch(patch_id, &signer)?;
-                println!("Linked patch {} to context {}", short_id(&patch_id), short_id(&context_id));
+                println!(
+                    "Linked patch {} to context {}",
+                    short_id(&patch_id),
+                    short_id(&context_id)
+                );
             }
             if let Some(pl) = plan {
                 let plan_id = resolve_cob_prefix(&pl, &plan_type, &repo)?;
                 ctx.link_plan(plan_id, &signer)?;
-                println!("Linked plan {} to context {}", short_id(&plan_id), short_id(&context_id));
+                println!(
+                    "Linked plan {} to context {}",
+                    short_id(&plan_id),
+                    short_id(&context_id)
+                );
             }
         }
-        Commands::Unlink { id, commit, issue, patch, plan } => {
+        Commands::Unlink {
+            id,
+            commit,
+            issue,
+            patch,
+            plan,
+        } => {
             let issue_type = TypeName::from_str("xyz.radicle.issue")?;
             let patch_type = TypeName::from_str("xyz.radicle.patch")?;
             let plan_type = TypeName::from_str("me.hdh.plan")?;
@@ -531,22 +578,38 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             if let Some(sha) = commit {
                 let full_sha = resolve_commit_sha(&sha, &repo)?;
                 ctx.unlink_commit(full_sha.clone(), &signer)?;
-                println!("Unlinked commit {} from context {}", &full_sha[..7], short_id(&context_id));
+                println!(
+                    "Unlinked commit {} from context {}",
+                    &full_sha[..7],
+                    short_id(&context_id)
+                );
             }
             if let Some(i) = issue {
                 let issue_id = resolve_cob_prefix(&i, &issue_type, &repo)?;
                 ctx.unlink_issue(issue_id, &signer)?;
-                println!("Unlinked issue {} from context {}", short_id(&issue_id), short_id(&context_id));
+                println!(
+                    "Unlinked issue {} from context {}",
+                    short_id(&issue_id),
+                    short_id(&context_id)
+                );
             }
             if let Some(p) = patch {
                 let patch_id = resolve_cob_prefix(&p, &patch_type, &repo)?;
                 ctx.unlink_patch(patch_id, &signer)?;
-                println!("Unlinked patch {} from context {}", short_id(&patch_id), short_id(&context_id));
+                println!(
+                    "Unlinked patch {} from context {}",
+                    short_id(&patch_id),
+                    short_id(&context_id)
+                );
             }
             if let Some(pl) = plan {
                 let plan_id = resolve_cob_prefix(&pl, &plan_type, &repo)?;
                 ctx.unlink_plan(plan_id, &signer)?;
-                println!("Unlinked plan {} from context {}", short_id(&plan_id), short_id(&context_id));
+                println!(
+                    "Unlinked plan {} from context {}",
+                    short_id(&plan_id),
+                    short_id(&context_id)
+                );
             }
         }
     }
@@ -601,7 +664,7 @@ where
         0 => Err(format!("No {type_name} found matching prefix '{s}'").into()),
         1 => Ok(matches[0]),
         n => {
-            let ids: Vec<String> = matches.iter().map(|id| short_id(id)).collect();
+            let ids: Vec<String> = matches.iter().map(short_id).collect();
             Err(format!(
                 "Ambiguous {type_name} ID prefix '{s}': {n} objects match ({})",
                 ids.join(", ")
@@ -642,8 +705,12 @@ fn short_id(id: &ObjectId) -> String {
 fn files_from_head(git: &radicle::git::raw::Repository) -> BTreeSet<String> {
     let mut files = BTreeSet::new();
     let Ok(head) = git.head() else { return files };
-    let Ok(head_commit) = head.peel_to_commit() else { return files };
-    let Ok(head_tree) = head_commit.tree() else { return files };
+    let Ok(head_commit) = head.peel_to_commit() else {
+        return files;
+    };
+    let Ok(head_tree) = head_commit.tree() else {
+        return files;
+    };
     let parent_tree = head_commit.parent(0).ok().and_then(|p| p.tree().ok());
     let Ok(diff) = git.diff_tree_to_tree(parent_tree.as_ref(), Some(&head_tree), None) else {
         return files;
@@ -727,7 +794,9 @@ mod tests {
     }
 
     /// Create a temp git repo with an initial commit, returning (repo, commit_oid).
-    fn temp_repo_with_commit(files: &[(&str, &str)]) -> (radicle::git::raw::Repository, radicle::git::raw::Oid) {
+    fn temp_repo_with_commit(
+        files: &[(&str, &str)],
+    ) -> (radicle::git::raw::Repository, radicle::git::raw::Oid) {
         let dir = tempfile::tempdir().unwrap();
         let repo = radicle::git::raw::Repository::init(dir.path()).unwrap();
 
@@ -753,7 +822,8 @@ mod tests {
 
             let tree_oid = index.write_tree().unwrap();
             let tree = repo.find_tree(tree_oid).unwrap();
-            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[]).unwrap()
+            repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+                .unwrap()
         };
 
         // Keep tempdir alive by leaking it (tests are short-lived)
@@ -784,11 +854,15 @@ mod tests {
         let tree = repo.find_tree(tree_oid).unwrap();
         let parent = repo.find_commit(first_oid).unwrap();
         let sig = repo.signature().unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "second", &tree, &[&parent]).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "second", &tree, &[&parent])
+            .unwrap();
 
         let files = files_from_head(&repo);
         assert!(files.contains("b.txt"), "expected b.txt in {files:?}");
-        assert!(!files.contains("a.txt"), "a.txt should not appear — it didn't change");
+        assert!(
+            !files.contains("a.txt"),
+            "a.txt should not appear — it didn't change"
+        );
         assert_eq!(files.len(), 1);
     }
 
@@ -817,7 +891,16 @@ mod tests {
             index.write().unwrap();
             let tree_oid = index.write_tree().unwrap();
             let tree = repo.find_tree(tree_oid).unwrap();
-            let oid = repo.commit(Some("HEAD"), &sig, &sig, &format!("commit {i}"), &tree, &[&prev]).unwrap();
+            let oid = repo
+                .commit(
+                    Some("HEAD"),
+                    &sig,
+                    &sig,
+                    &format!("commit {i}"),
+                    &tree,
+                    &[&prev],
+                )
+                .unwrap();
             expected.push(oid.to_string());
             prev = repo.find_commit(oid).unwrap();
         }
@@ -845,7 +928,10 @@ mod tests {
         let json = r#"{"title":"t","description":"d","approach":"a","typoField":"oops"}"#;
         let result: Result<JsonContextInput, _> = serde_json::from_str(json);
         let err = result.unwrap_err().to_string();
-        assert!(err.contains("unknown field"), "expected unknown field error, got: {err}");
+        assert!(
+            err.contains("unknown field"),
+            "expected unknown field error, got: {err}"
+        );
     }
 
     #[test]

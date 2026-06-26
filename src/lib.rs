@@ -11,6 +11,8 @@
 //!
 //! The COB type name is `me.hdh.context` following the reverse domain notation pattern.
 
+#![allow(clippy::large_enum_variant)]
+#![allow(clippy::result_large_err)]
 #![warn(clippy::unwrap_used)]
 #![warn(missing_docs)]
 
@@ -57,6 +59,9 @@ pub enum Error {
     /// Store error.
     #[error("store: {0}")]
     Store(#[from] store::Error),
+    /// Repository error.
+    #[error(transparent)]
+    Repository(#[from] RepositoryError),
     /// Action not authorized.
     #[error("{0} not authorized to apply {1:?}")]
     NotAuthorized(ActorId, Action),
@@ -267,11 +272,11 @@ impl Context {
 
 /// Contexts store for a repository.
 pub struct Contexts<'a, R> {
-    raw: store::Store<'a, Context, R>,
+    raw: store::Store<'a, Context, R, store::access::ReadOnly>,
 }
 
 impl<'a, R> Deref for Contexts<'a, R> {
-    type Target = store::Store<'a, Context, R>;
+    type Target = store::Store<'a, Context, R, store::access::ReadOnly>;
 
     fn deref(&self) -> &Self::Target {
         &self.raw
@@ -294,7 +299,7 @@ where
     /// Open a contexts store.
     pub fn open(repository: &'a R) -> Result<Self, RepositoryError> {
         let identity = repository.identity_head()?;
-        let raw = store::Store::open(repository)?.identity(identity);
+        let raw = store::Store::open(repository, store::access::ReadOnly)?.identity(identity);
         Ok(Self { raw })
     }
 }
@@ -340,15 +345,16 @@ where
         };
         let actions = NonEmpty::new(action);
 
-        self.raw
-            .create("Create context", actions, embeds, signer)
+        let mut raw = store::Store::open(self.raw.as_ref(), store::access::WriteAs::new(signer))?
+            .identity(self.raw.as_ref().identity_head()?);
+        raw.create("Create context", actions, embeds)
             .map_err(Error::from)
     }
 }
 
 impl<R> Contexts<'_, R>
 where
-    R: ReadRepository + cob::Store,
+    R: ReadRepository + cob::Store<Namespace = NodeId>,
 {
     /// Get a context.
     pub fn get(&self, id: &ObjectId) -> Result<Option<Context>, store::Error> {
@@ -361,10 +367,7 @@ where
     R: WriteRepository + SignRepository + cob::Store<Namespace = NodeId>,
 {
     /// Get a context for mutation.
-    pub fn get_mut<'g>(
-        &'g mut self,
-        id: &ObjectId,
-    ) -> Result<ContextMut<'a, 'g, R>, store::Error> {
+    pub fn get_mut<'g>(&'g mut self, id: &ObjectId) -> Result<ContextMut<'a, 'g, R>, store::Error> {
         let context = self
             .raw
             .get(id)?
@@ -425,7 +428,10 @@ where
         let mut tx = store::Transaction::default();
         operations(&mut tx)?;
 
-        let (context, commit) = tx.commit(message, self.id, &mut self.store.raw, signer)?;
+        let mut raw =
+            store::Store::open(self.store.raw.as_ref(), store::access::WriteAs::new(signer))?
+                .identity(self.store.raw.as_ref().identity_head()?);
+        let (context, commit) = tx.commit(message, self.id, &mut raw)?;
         self.context = context;
 
         Ok(commit)
@@ -508,11 +514,7 @@ where
     }
 
     /// Link a plan to the context.
-    pub fn link_plan<G>(
-        &mut self,
-        plan_id: ObjectId,
-        signer: &Device<G>,
-    ) -> Result<EntryId, Error>
+    pub fn link_plan<G>(&mut self, plan_id: ObjectId, signer: &Device<G>) -> Result<EntryId, Error>
     where
         G: crypto::signature::Signer<crypto::Signature>,
     {

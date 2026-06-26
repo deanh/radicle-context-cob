@@ -157,7 +157,9 @@ mod tests {
 
     #[test]
     fn test_link_issue_serialization() {
-        let id = ObjectId::from_str("d96f02665bf896324e2f0a4c18d08a768135ef2e").unwrap();
+        // SAFETY: The literal is a valid object ID used only for serialization tests.
+        let id = ObjectId::from_str("d96f02665bf896324e2f0a4c18d08a768135ef2e")
+            .expect("test object ID should parse");
         let action = Action::LinkIssue { issue_id: id };
 
         let json = serde_json::to_string(&action).expect("serialization failed");
@@ -169,7 +171,9 @@ mod tests {
 
     #[test]
     fn test_link_plan_serialization() {
-        let id = ObjectId::from_str("d96f02665bf896324e2f0a4c18d08a768135ef2e").unwrap();
+        // SAFETY: The literal is a valid object ID used only for serialization tests.
+        let id = ObjectId::from_str("d96f02665bf896324e2f0a4c18d08a768135ef2e")
+            .expect("test object ID should parse");
         let action = Action::LinkPlan { plan_id: id };
 
         let json = serde_json::to_string(&action).expect("serialization failed");

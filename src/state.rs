@@ -331,8 +331,20 @@ mod tests {
 
     #[test]
     fn test_check_result_lowercase_serialization() {
-        assert_eq!(serde_json::to_string(&CheckResult::Pass).unwrap(), "\"pass\"");
-        assert_eq!(serde_json::to_string(&CheckResult::Fail).unwrap(), "\"fail\"");
-        assert_eq!(serde_json::to_string(&CheckResult::Skip).unwrap(), "\"skip\"");
+        // SAFETY: Unit enum serialization cannot fail for these variants.
+        assert_eq!(
+            serde_json::to_string(&CheckResult::Pass).expect("check result should serialize"),
+            "\"pass\""
+        );
+        // SAFETY: Unit enum serialization cannot fail for these variants.
+        assert_eq!(
+            serde_json::to_string(&CheckResult::Fail).expect("check result should serialize"),
+            "\"fail\""
+        );
+        // SAFETY: Unit enum serialization cannot fail for these variants.
+        assert_eq!(
+            serde_json::to_string(&CheckResult::Skip).expect("check result should serialize"),
+            "\"skip\""
+        );
     }
 }
