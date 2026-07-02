@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Project engineering standards in `CLAUDE.md`, adapted for this single-crate
+  library and CLI.
+- Cargo clippy lint configuration for the project standards.
+
+### Changed
+
+- Updated Radicle dependencies to `radicle` 0.24.0 and `radicle-cob` 0.20.0.
+- Migrated context COB storage to Radicle's read/write access-mode store API.
+- Switched CLI top-level error handling to `anyhow`.
+- Marked the public library `Error` enum as non-exhaustive and boxed the
+  unauthorized `Action` payload to keep error results small.
+- Added `#[must_use]` to public context accessor methods.
+
+### Fixed
+
+- Removed direct indexing from CLI helper code covered by the project lint set.
+- Fixed rustdoc HTML warnings in CLI module usage documentation.
+- Made enum matches exhaustive where required by the configured clippy lints.
+
 ## [0.2.0] - 2026-02-27
 
 ### Added
