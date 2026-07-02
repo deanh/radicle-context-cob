@@ -54,9 +54,13 @@ matching. All match arms over enums must be exhaustive (no `_ =>`).
   1. Static analysis proves it cannot fail.
   2. Failure indicates an unrecoverable bug.
   3. Inside `#[cfg(test)]` code.
-- Document every `unwrap`/`expect` call site with a `// SAFETY:` comment
-  explaining why it is safe. Use `expect` only when an invariant was violated
-  and include the expectation in the message.
+- In non-test code, document every `unwrap`/`expect` call site with a
+  `// SAFETY:` comment explaining why it is safe. Use `expect` only when an
+  invariant was violated and include the expectation in the message.
+- In tests, prefer `expect`/`expect_err` with a clear fixture or assertion
+  message when that improves diagnostics. Bare `unwrap` is acceptable for
+  straightforward test setup where the enclosing test already explains the
+  invariant.
 
 ## Module and import organization
 

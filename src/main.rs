@@ -744,21 +744,27 @@ mod tests {
     fn test_validate_hex_prefix_valid() {
         let result = validate_hex_prefix("abc1234", "ID");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "abc1234");
+        assert_eq!(result.expect("valid hex prefix should pass"), "abc1234");
     }
 
     #[test]
     fn test_validate_hex_prefix_uppercase_normalized() {
         let result = validate_hex_prefix("ABC1234", "ID");
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "abc1234");
+        assert_eq!(
+            result.expect("uppercase hex prefix should normalize"),
+            "abc1234"
+        );
     }
 
     #[test]
     fn test_validate_hex_prefix_too_short() {
         let result = validate_hex_prefix("abc12", "ID");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("too short"));
+        assert!(result
+            .expect_err("short prefix should fail validation")
+            .to_string()
+            .contains("too short"));
     }
 
     #[test]
@@ -771,7 +777,10 @@ mod tests {
     fn test_validate_hex_prefix_non_hex() {
         let result = validate_hex_prefix("xyz1234", "ID");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("not a valid hex"));
+        assert!(result
+            .expect_err("non-hex prefix should fail validation")
+            .to_string()
+            .contains("not a valid hex"));
     }
 
     #[test]
@@ -783,7 +792,10 @@ mod tests {
     #[test]
     fn test_validate_hex_prefix_label_in_error() {
         let result = validate_hex_prefix("xyz", "commit SHA");
-        assert!(result.unwrap_err().to_string().contains("commit SHA"));
+        assert!(result
+            .expect_err("invalid prefix should include the label")
+            .to_string()
+            .contains("commit SHA"));
     }
 
     /// Create a temp git repo with an initial commit, returning (repo, commit_oid).
