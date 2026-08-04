@@ -1,6 +1,6 @@
 [package]
 name = "radicle-context-cob"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 description = "Radicle Collaborative Object type for AI session context"
 license = "MIT OR Apache-2.0"
@@ -18,8 +18,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Radicle core - using git dependencies for portability
-radicle = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle", version = "0.24.0" }
-radicle-cob = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle-cob", version = "0.20.0" }
+radicle = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle", version = "0.25.1" }
+radicle-cob = { git = "https://seed.radicle.xyz/z3gqcJUoA1n9HaHKufZs5FCSGazv5.git", package = "radicle-cob", version = "0.21.1" }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

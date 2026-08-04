@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-04
+
 ### Added
 
 - Project engineering standards in `CLAUDE.md`, adapted for this single-crate
@@ -14,7 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
-- Updated Radicle dependencies to `radicle` 0.24.0 and `radicle-cob` 0.20.0.
+- Updated Radicle dependencies to `radicle` 0.25.1 and `radicle-cob` 0.21.1.
 - Migrated context COB storage to Radicle's read/write access-mode store API.
 - Switched CLI top-level error handling to `anyhow`.
 - Marked the public library `Error` enum as non-exhaustive and boxed the

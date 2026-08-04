@@ -30,7 +30,6 @@ use radicle::cob::store::Cob;
 use radicle::cob::{op, store, ActorId, Embed, EntryId, ObjectId, TypeName};
 use radicle::crypto;
 use radicle::identity::doc::DocError;
-use radicle::node::device::Device;
 use radicle::node::NodeId;
 use radicle::prelude::{Doc, ReadRepository, RepoId};
 use radicle::storage::{HasRepoId, RepositoryError, SignRepository, WriteRepository};
@@ -323,10 +322,10 @@ where
         verification: Vec<state::VerificationResult>,
         task_id: Option<String>,
         embeds: Vec<Embed<Uri>>,
-        signer: &Device<G>,
+        signer: &G,
     ) -> Result<(ObjectId, Context), Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         use nonempty::NonEmpty;
 
@@ -419,11 +418,11 @@ where
     fn transaction<G, F>(
         &mut self,
         message: &str,
-        signer: &Device<G>,
+        signer: &G,
         operations: F,
     ) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
         F: FnOnce(&mut store::Transaction<Context, R>) -> Result<(), store::Error>,
     {
         let mut tx = store::Transaction::default();
@@ -439,9 +438,9 @@ where
     }
 
     /// Link a git commit to the context.
-    pub fn link_commit<G>(&mut self, sha: String, signer: &Device<G>) -> Result<EntryId, Error>
+    pub fn link_commit<G>(&mut self, sha: String, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Link commit", signer, |tx| {
             tx.push(Action::LinkCommit { sha })
@@ -449,9 +448,9 @@ where
     }
 
     /// Unlink a git commit from the context.
-    pub fn unlink_commit<G>(&mut self, sha: String, signer: &Device<G>) -> Result<EntryId, Error>
+    pub fn unlink_commit<G>(&mut self, sha: String, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Unlink commit", signer, |tx| {
             tx.push(Action::UnlinkCommit { sha })
@@ -459,13 +458,9 @@ where
     }
 
     /// Link an issue to the context.
-    pub fn link_issue<G>(
-        &mut self,
-        issue_id: ObjectId,
-        signer: &Device<G>,
-    ) -> Result<EntryId, Error>
+    pub fn link_issue<G>(&mut self, issue_id: ObjectId, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Link issue", signer, |tx| {
             tx.push(Action::LinkIssue { issue_id })
@@ -473,13 +468,9 @@ where
     }
 
     /// Unlink an issue from the context.
-    pub fn unlink_issue<G>(
-        &mut self,
-        issue_id: ObjectId,
-        signer: &Device<G>,
-    ) -> Result<EntryId, Error>
+    pub fn unlink_issue<G>(&mut self, issue_id: ObjectId, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Unlink issue", signer, |tx| {
             tx.push(Action::UnlinkIssue { issue_id })
@@ -487,13 +478,9 @@ where
     }
 
     /// Link a patch to the context.
-    pub fn link_patch<G>(
-        &mut self,
-        patch_id: ObjectId,
-        signer: &Device<G>,
-    ) -> Result<EntryId, Error>
+    pub fn link_patch<G>(&mut self, patch_id: ObjectId, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Link patch", signer, |tx| {
             tx.push(Action::LinkPatch { patch_id })
@@ -501,13 +488,9 @@ where
     }
 
     /// Unlink a patch from the context.
-    pub fn unlink_patch<G>(
-        &mut self,
-        patch_id: ObjectId,
-        signer: &Device<G>,
-    ) -> Result<EntryId, Error>
+    pub fn unlink_patch<G>(&mut self, patch_id: ObjectId, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Unlink patch", signer, |tx| {
             tx.push(Action::UnlinkPatch { patch_id })
@@ -515,9 +498,9 @@ where
     }
 
     /// Link a plan to the context.
-    pub fn link_plan<G>(&mut self, plan_id: ObjectId, signer: &Device<G>) -> Result<EntryId, Error>
+    pub fn link_plan<G>(&mut self, plan_id: ObjectId, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Link plan", signer, |tx| {
             tx.push(Action::LinkPlan { plan_id })
@@ -525,13 +508,9 @@ where
     }
 
     /// Unlink a plan from the context.
-    pub fn unlink_plan<G>(
-        &mut self,
-        plan_id: ObjectId,
-        signer: &Device<G>,
-    ) -> Result<EntryId, Error>
+    pub fn unlink_plan<G>(&mut self, plan_id: ObjectId, signer: &G) -> Result<EntryId, Error>
     where
-        G: crypto::signature::Signer<crypto::Signature>,
+        G: crypto::Signer,
     {
         self.transaction("Unlink plan", signer, |tx| {
             tx.push(Action::UnlinkPlan { plan_id })
